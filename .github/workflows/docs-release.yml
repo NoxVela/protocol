@@ -1,0 +1,136 @@
+name: Release & Documentation
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release version or tag (e.g. v1.0.0)'
+        required: false
+        default: 'v1.0.0'
+      deploy_pages:
+        description: 'Deploy HTML documentation to GitHub Pages'
+        required: true
+        type: boolean
+        default: false
+      publish_packages:
+        description: 'Publish NuGet package to GitHub Packages'
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  packages: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: docs-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish-release:
+    name: Build, Package, Deploy Pages & Publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js (for @asyncapi/cli)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install AsyncAPI CLI
+        run: npm install -g @asyncapi/cli
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore Dependencies
+        run: dotnet restore NoxVela.sln
+
+      - name: Build Solution
+        run: dotnet build NoxVela.sln --no-restore --configuration Release
+
+      - name: Run Test Suite
+        run: dotnet test NoxVela.sln --no-build --configuration Release --verbosity normal
+
+      - name: Determine Release Version
+        id: version
+        shell: bash
+        run: |
+          RAW_VER="${{ github.event.inputs.tag_name || github.ref_name }}"
+          CLEAN_VER="${RAW_VER#v}"
+          echo "tag=$RAW_VER" >> $GITHUB_OUTPUT
+          echo "version=$CLEAN_VER" >> $GITHUB_OUTPUT
+          echo "PROTOCOL_RELEASE_VERSION=$CLEAN_VER" >> $GITHUB_ENV
+          echo "Target documentation version: $CLEAN_VER (from tag $RAW_VER)"
+
+      - name: Generate AsyncAPI 3.1 Spec & Interactive HTML Portal
+        run: dotnet run --project tools/NoxVela.Protocol.Generator/NoxVela.Protocol.Generator.csproj --configuration Release -- --html .
+
+      - name: Validate Generated Specification
+        run: asyncapi validate spec/asyncapi.yaml
+
+      - name: Setup GitHub Pages
+        if: inputs.deploy_pages == true
+        id: pages
+        uses: actions/configure-pages@v5
+        continue-on-error: true
+
+      - name: Upload Pages Artifact
+        if: inputs.deploy_pages == true && steps.pages.outcome == 'success'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        if: inputs.deploy_pages == true && steps.pages.outcome == 'success'
+        uses: actions/deploy-pages@v4
+
+      - name: Pack NuGet Package
+        run: dotnet pack src/NoxVela.Protocol/NoxVela.Protocol.csproj --configuration Release --output artifacts/
+
+      - name: Publish to GitHub Packages
+        if: inputs.publish_packages == true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          dotnet nuget push artifacts/*.nupkg \
+            --source "https://nuget.pkg.github.com/NoxVela/index.json" \
+            --api-key "${{ secrets.GITHUB_TOKEN }}" \
+            --skip-duplicate
+
+      - name: Upload AsyncAPI Specification to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          if ! gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Creating GitHub Release $TAG..."
+            gh release create "$TAG" --title "Release $TAG" --notes "Release $TAG of NoxVela Protocol contracts."
+          fi
+          echo "Attaching spec/asyncapi.yaml to GitHub Release $TAG..."
+          gh release upload "$TAG" spec/asyncapi.yaml --clobber
+
+      - name: Commit Updated Docs & Spec to Main
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if [[ -n $(git status --porcelain spec/ docs/) ]]; then
+            echo "Committing updated AsyncAPI spec and HTML docs back to main..."
+            git add spec/ docs/
+            git commit -m "docs(release): synchronize AsyncAPI spec and HTML docs for ${{ steps.version.outputs.tag }} [skip ci]"
+            git push origin HEAD:main || echo "Warning: Direct push to main branch failed or branch is protected."
+          else
+            echo "Working tree is clean; no changes to commit."
+          fi

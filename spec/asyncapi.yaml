@@ -1,0 +1,2058 @@
+asyncapi: 3.1.0
+info:
+  title: NoxVela Service Protocol
+  version: 1.1.0
+  description: >-
+    Bilateral WebSocket specification for communication between NoxVela Server and external worker services (Code Analyzers, AI services, etc.).
+
+
+    All messages across the WebSocket connection use UTF-8 text frames adhering to the `Wrapper` envelope.
+
+    Notice that the `payload` property within the wrapper is a serialized JSON string.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+defaultContentType: application/json
+channels:
+  wsChannel:
+    address: /ws
+    description: Bi-directional WebSocket communication channel for analyzer/service registration, task dispatch, and AST graph streaming.
+    messages:
+      registrationMessage:
+        $ref: '#/components/messages/RegistrationMessage'
+      statusMessage:
+        $ref: '#/components/messages/StatusMessage'
+      analysisStatusMessage:
+        $ref: '#/components/messages/AnalysisStatusMessage'
+      analysisMetricsMessage:
+        $ref: '#/components/messages/AnalysisMetricsMessage'
+      nodeMessage:
+        $ref: '#/components/messages/NodeMessage'
+      relationMessage:
+        $ref: '#/components/messages/RelationMessage'
+      nodesBatchMessage:
+        $ref: '#/components/messages/NodesBatchMessage'
+      relationsBatchMessage:
+        $ref: '#/components/messages/RelationsBatchMessage'
+      runAnalysisAckMessage:
+        $ref: '#/components/messages/RunAnalysisAckMessage'
+      errorMessage:
+        $ref: '#/components/messages/ErrorMessage'
+      registrationResultMessage:
+        $ref: '#/components/messages/RegistrationResultMessage'
+      runAnalysisMessage:
+        $ref: '#/components/messages/RunAnalysisMessage'
+      cancelAnalysisMessage:
+        $ref: '#/components/messages/CancelAnalysisMessage'
+      statusAckMessage:
+        $ref: '#/components/messages/StatusAckMessage'
+      batchAckMessage:
+        $ref: '#/components/messages/BatchAckMessage'
+      analysisCompletedAckMessage:
+        $ref: '#/components/messages/AnalysisCompletedAckMessage'
+operations:
+  registerService:
+    action: send
+    channel:
+      $ref: '#/channels/wsChannel'
+    summary: Service registers itself with the server upon connection.
+    messages:
+    - $ref: '#/channels/wsChannel/messages/registrationMessage'
+  reportStatus:
+    action: send
+    channel:
+      $ref: '#/channels/wsChannel'
+    summary: Worker sends periodic heartbeat status.
+    messages:
+    - $ref: '#/channels/wsChannel/messages/statusMessage'
+  reportAnalysisStatus:
+    action: send
+    channel:
+      $ref: '#/channels/wsChannel'
+    summary: Worker reports analysis lifecycle progress.
+    messages:
+    - $ref: '#/channels/wsChannel/messages/analysisStatusMessage'
+  reportAnalysisMetrics:
+    action: send
+    channel:
+      $ref: '#/channels/wsChannel'
+    summary: Worker emits summary metrics after analysis.
+    messages:
+    - $ref: '#/channels/wsChannel/messages/analysisMetricsMessage'
+  streamNode:
+    action: send
+    channel:
+      $ref: '#/channels/wsChannel'
+    summary: Worker streams a single AST node.
+    messages:
+    - $ref: '#/channels/wsChannel/messages/nodeMessage'
+  streamRelation:
+    action: send
+    channel:
+      $ref: '#/channels/wsChannel'
+    summary: Worker streams a single AST relation edge.
+    messages:
+    - $ref: '#/channels/wsChannel/messages/relationMessage'
+  streamNodesBatch:
+    action: send
+    channel:
+      $ref: '#/channels/wsChannel'
+    summary: Worker flushes a micro-batch of AST nodes.
+    messages:
+    - $ref: '#/channels/wsChannel/messages/nodesBatchMessage'
+  streamRelationsBatch:
+    action: send
+    channel:
+      $ref: '#/channels/wsChannel'
+    summary: Worker flushes a micro-batch of AST relations.
+    messages:
+    - $ref: '#/channels/wsChannel/messages/relationsBatchMessage'
+  acknowledgeRunAnalysis:
+    action: send
+    channel:
+      $ref: '#/channels/wsChannel'
+    summary: Worker confirms acceptance of an analysis task.
+    messages:
+    - $ref: '#/channels/wsChannel/messages/runAnalysisAckMessage'
+  reportError:
+    action: send
+    channel:
+      $ref: '#/channels/wsChannel'
+    summary: Worker or server emits an error message.
+    messages:
+    - $ref: '#/channels/wsChannel/messages/errorMessage'
+  acknowledgeRegistration:
+    action: receive
+    channel:
+      $ref: '#/channels/wsChannel'
+    summary: Server acknowledges or rejects service registration.
+    messages:
+    - $ref: '#/channels/wsChannel/messages/registrationResultMessage'
+  dispatchAnalysis:
+    action: receive
+    channel:
+      $ref: '#/channels/wsChannel'
+    summary: Server commands worker to run analysis.
+    messages:
+    - $ref: '#/channels/wsChannel/messages/runAnalysisMessage'
+  cancelAnalysis:
+    action: receive
+    channel:
+      $ref: '#/channels/wsChannel'
+    summary: Server commands worker to abort analysis.
+    messages:
+    - $ref: '#/channels/wsChannel/messages/cancelAnalysisMessage'
+  acknowledgeStatus:
+    action: receive
+    channel:
+      $ref: '#/channels/wsChannel'
+    summary: Server acknowledges heartbeat status.
+    messages:
+    - $ref: '#/channels/wsChannel/messages/statusAckMessage'
+  acknowledgeBatch:
+    action: receive
+    channel:
+      $ref: '#/channels/wsChannel'
+    summary: Server acknowledges batch persistence.
+    messages:
+    - $ref: '#/channels/wsChannel/messages/batchAckMessage'
+  acknowledgeAnalysisCompleted:
+    action: receive
+    channel:
+      $ref: '#/channels/wsChannel'
+    summary: Server confirms graph reconciliation in database.
+    messages:
+    - $ref: '#/channels/wsChannel/messages/analysisCompletedAckMessage'
+components:
+  messages:
+    RegistrationMessage:
+      name: RegistrationMessage
+      title: Service Registration
+      summary: Service registers its capabilities and metadata upon connecting.
+      contentType: application/json
+      payload:
+        type: object
+        description: Wrapper envelope framing WebSocket text messages.
+        required:
+        - messageId
+        - messageType
+        - payload
+        properties:
+          messageId:
+            type: string
+            format: uuid
+            description: Unique message identifier (UUIDv7 recommended).
+            example: 0191ebc2-8400-7c23-881e-123456789abc
+          sourceMessageId:
+            type: string
+            format: uuid
+            description: Identifier of the request message this frame responds to, or 00000000-0000-0000-0000-000000000000 for original frames.
+            example: 00000000-0000-0000-0000-000000000000
+          messageType:
+            type: string
+            const: registration
+            description: Message discriminator set to 'registration'.
+          payload:
+            type: string
+            description: JSON-stringified `RegistrationPayload` payload.
+    StatusMessage:
+      name: StatusMessage
+      title: Heartbeat Status
+      summary: Periodic heartbeat report from worker to server.
+      contentType: application/json
+      payload:
+        type: object
+        description: Wrapper envelope framing WebSocket text messages.
+        required:
+        - messageId
+        - messageType
+        - payload
+        properties:
+          messageId:
+            type: string
+            format: uuid
+            description: Unique message identifier (UUIDv7 recommended).
+            example: 0191ebc2-8400-7c23-881e-123456789abc
+          sourceMessageId:
+            type: string
+            format: uuid
+            description: Identifier of the request message this frame responds to, or 00000000-0000-0000-0000-000000000000 for original frames.
+            example: 00000000-0000-0000-0000-000000000000
+          messageType:
+            type: string
+            const: status
+            description: Message discriminator set to 'status'.
+          payload:
+            type: string
+            description: JSON-stringified `StatusPayload` payload.
+    AnalysisStatusMessage:
+      name: AnalysisStatusMessage
+      title: Analysis Status
+      summary: Lifecycle progress and state reports during an analysis run.
+      contentType: application/json
+      payload:
+        type: object
+        description: Wrapper envelope framing WebSocket text messages.
+        required:
+        - messageId
+        - messageType
+        - payload
+        properties:
+          messageId:
+            type: string
+            format: uuid
+            description: Unique message identifier (UUIDv7 recommended).
+            example: 0191ebc2-8400-7c23-881e-123456789abc
+          sourceMessageId:
+            type: string
+            format: uuid
+            description: Identifier of the request message this frame responds to, or 00000000-0000-0000-0000-000000000000 for original frames.
+            example: 00000000-0000-0000-0000-000000000000
+          messageType:
+            type: string
+            const: analysis_status
+            description: Message discriminator set to 'analysis_status'.
+          payload:
+            type: string
+            description: JSON-stringified `AnalysisStatusPayload` payload.
+    AnalysisMetricsMessage:
+      name: AnalysisMetricsMessage
+      title: Analysis Metrics
+      summary: Telemetry metrics emitted at the conclusion of an analysis run.
+      contentType: application/json
+      payload:
+        type: object
+        description: Wrapper envelope framing WebSocket text messages.
+        required:
+        - messageId
+        - messageType
+        - payload
+        properties:
+          messageId:
+            type: string
+            format: uuid
+            description: Unique message identifier (UUIDv7 recommended).
+            example: 0191ebc2-8400-7c23-881e-123456789abc
+          sourceMessageId:
+            type: string
+            format: uuid
+            description: Identifier of the request message this frame responds to, or 00000000-0000-0000-0000-000000000000 for original frames.
+            example: 00000000-0000-0000-0000-000000000000
+          messageType:
+            type: string
+            const: analysis_metrics
+            description: Message discriminator set to 'analysis_metrics'.
+          payload:
+            type: string
+            description: JSON-stringified `AnalysisMetricsPayload` payload.
+    NodeMessage:
+      name: NodeMessage
+      title: AST Node
+      summary: Single AST node streamed during code analysis.
+      contentType: application/json
+      payload:
+        type: object
+        description: Wrapper envelope framing WebSocket text messages.
+        required:
+        - messageId
+        - messageType
+        - payload
+        properties:
+          messageId:
+            type: string
+            format: uuid
+            description: Unique message identifier (UUIDv7 recommended).
+            example: 0191ebc2-8400-7c23-881e-123456789abc
+          sourceMessageId:
+            type: string
+            format: uuid
+            description: Identifier of the request message this frame responds to, or 00000000-0000-0000-0000-000000000000 for original frames.
+            example: 00000000-0000-0000-0000-000000000000
+          messageType:
+            type: string
+            const: node
+            description: Message discriminator set to 'node'.
+          payload:
+            type: string
+            description: JSON-stringified `NodeBase` payload.
+    RelationMessage:
+      name: RelationMessage
+      title: AST Relation
+      summary: Single AST relation edge streamed during code analysis.
+      contentType: application/json
+      payload:
+        type: object
+        description: Wrapper envelope framing WebSocket text messages.
+        required:
+        - messageId
+        - messageType
+        - payload
+        properties:
+          messageId:
+            type: string
+            format: uuid
+            description: Unique message identifier (UUIDv7 recommended).
+            example: 0191ebc2-8400-7c23-881e-123456789abc
+          sourceMessageId:
+            type: string
+            format: uuid
+            description: Identifier of the request message this frame responds to, or 00000000-0000-0000-0000-000000000000 for original frames.
+            example: 00000000-0000-0000-0000-000000000000
+          messageType:
+            type: string
+            const: relation
+            description: Message discriminator set to 'relation'.
+          payload:
+            type: string
+            description: JSON-stringified `RelationNode` payload.
+    NodesBatchMessage:
+      name: NodesBatchMessage
+      title: AST Nodes Batch
+      summary: Micro-batch containing multiple AST nodes streamed concurrently.
+      contentType: application/json
+      payload:
+        type: object
+        description: Wrapper envelope framing WebSocket text messages.
+        required:
+        - messageId
+        - messageType
+        - payload
+        properties:
+          messageId:
+            type: string
+            format: uuid
+            description: Unique message identifier (UUIDv7 recommended).
+            example: 0191ebc2-8400-7c23-881e-123456789abc
+          sourceMessageId:
+            type: string
+            format: uuid
+            description: Identifier of the request message this frame responds to, or 00000000-0000-0000-0000-000000000000 for original frames.
+            example: 00000000-0000-0000-0000-000000000000
+          messageType:
+            type: string
+            const: nodes_batch
+            description: Message discriminator set to 'nodes_batch'.
+          payload:
+            type: string
+            description: JSON-stringified `NodesBatchPayload` payload.
+    RelationsBatchMessage:
+      name: RelationsBatchMessage
+      title: AST Relations Batch
+      summary: Micro-batch containing multiple AST relations streamed concurrently.
+      contentType: application/json
+      payload:
+        type: object
+        description: Wrapper envelope framing WebSocket text messages.
+        required:
+        - messageId
+        - messageType
+        - payload
+        properties:
+          messageId:
+            type: string
+            format: uuid
+            description: Unique message identifier (UUIDv7 recommended).
+            example: 0191ebc2-8400-7c23-881e-123456789abc
+          sourceMessageId:
+            type: string
+            format: uuid
+            description: Identifier of the request message this frame responds to, or 00000000-0000-0000-0000-000000000000 for original frames.
+            example: 00000000-0000-0000-0000-000000000000
+          messageType:
+            type: string
+            const: relations_batch
+            description: Message discriminator set to 'relations_batch'.
+          payload:
+            type: string
+            description: JSON-stringified `RelationsBatchPayload` payload.
+    RunAnalysisAckMessage:
+      name: RunAnalysisAckMessage
+      title: Run Analysis Acknowledgment
+      summary: Worker confirms receipt and acceptance of an analysis task.
+      contentType: application/json
+      payload:
+        type: object
+        description: Wrapper envelope framing WebSocket text messages.
+        required:
+        - messageId
+        - messageType
+        - payload
+        properties:
+          messageId:
+            type: string
+            format: uuid
+            description: Unique message identifier (UUIDv7 recommended).
+            example: 0191ebc2-8400-7c23-881e-123456789abc
+          sourceMessageId:
+            type: string
+            format: uuid
+            description: Identifier of the request message this frame responds to, or 00000000-0000-0000-0000-000000000000 for original frames.
+            example: 00000000-0000-0000-0000-000000000000
+          messageType:
+            type: string
+            const: run_analysis_ack
+            description: Message discriminator set to 'run_analysis_ack'.
+          payload:
+            type: string
+            description: JSON-stringified `RunAnalysisAckPayload` payload.
+    ErrorMessage:
+      name: ErrorMessage
+      title: Error Message
+      summary: Standardized error notification frame.
+      contentType: application/json
+      payload:
+        type: object
+        description: Wrapper envelope framing WebSocket text messages.
+        required:
+        - messageId
+        - messageType
+        - payload
+        properties:
+          messageId:
+            type: string
+            format: uuid
+            description: Unique message identifier (UUIDv7 recommended).
+            example: 0191ebc2-8400-7c23-881e-123456789abc
+          sourceMessageId:
+            type: string
+            format: uuid
+            description: Identifier of the request message this frame responds to, or 00000000-0000-0000-0000-000000000000 for original frames.
+            example: 00000000-0000-0000-0000-000000000000
+          messageType:
+            type: string
+            const: error
+            description: Message discriminator set to 'error'.
+          payload:
+            type: string
+            description: JSON-stringified `ErrorMessagePayload` payload.
+    RegistrationResultMessage:
+      name: RegistrationResultMessage
+      title: Registration Result
+      summary: Server accepts or rejects service registration.
+      contentType: application/json
+      payload:
+        type: object
+        description: Wrapper envelope framing WebSocket text messages.
+        required:
+        - messageId
+        - messageType
+        - payload
+        properties:
+          messageId:
+            type: string
+            format: uuid
+            description: Unique message identifier (UUIDv7 recommended).
+            example: 0191ebc2-8400-7c23-881e-123456789abc
+          sourceMessageId:
+            type: string
+            format: uuid
+            description: Identifier of the request message this frame responds to, or 00000000-0000-0000-0000-000000000000 for original frames.
+            example: 00000000-0000-0000-0000-000000000000
+          messageType:
+            type: string
+            const: registration_result
+            description: Message discriminator set to 'registration_result'.
+          payload:
+            type: string
+            description: JSON-stringified `RegistrationStatusPayload` payload.
+    RunAnalysisMessage:
+      name: RunAnalysisMessage
+      title: Run Analysis Command
+      summary: Server dispatches a repository analysis task to an idle worker.
+      contentType: application/json
+      payload:
+        type: object
+        description: Wrapper envelope framing WebSocket text messages.
+        required:
+        - messageId
+        - messageType
+        - payload
+        properties:
+          messageId:
+            type: string
+            format: uuid
+            description: Unique message identifier (UUIDv7 recommended).
+            example: 0191ebc2-8400-7c23-881e-123456789abc
+          sourceMessageId:
+            type: string
+            format: uuid
+            description: Identifier of the request message this frame responds to, or 00000000-0000-0000-0000-000000000000 for original frames.
+            example: 00000000-0000-0000-0000-000000000000
+          messageType:
+            type: string
+            const: run_analysis
+            description: Message discriminator set to 'run_analysis'.
+          payload:
+            type: string
+            description: JSON-stringified `RunAnalysisPayload` payload.
+    CancelAnalysisMessage:
+      name: CancelAnalysisMessage
+      title: Cancel Analysis Command
+      summary: Server commands a worker to abort an active analysis task.
+      contentType: application/json
+      payload:
+        type: object
+        description: Wrapper envelope framing WebSocket text messages.
+        required:
+        - messageId
+        - messageType
+        - payload
+        properties:
+          messageId:
+            type: string
+            format: uuid
+            description: Unique message identifier (UUIDv7 recommended).
+            example: 0191ebc2-8400-7c23-881e-123456789abc
+          sourceMessageId:
+            type: string
+            format: uuid
+            description: Identifier of the request message this frame responds to, or 00000000-0000-0000-0000-000000000000 for original frames.
+            example: 00000000-0000-0000-0000-000000000000
+          messageType:
+            type: string
+            const: cancel_analysis
+            description: Message discriminator set to 'cancel_analysis'.
+          payload:
+            type: string
+            description: JSON-stringified `CancelAnalysisPayload` payload.
+    StatusAckMessage:
+      name: StatusAckMessage
+      title: Status Acknowledgment
+      summary: Server acknowledges heartbeat status to detect half-open sockets.
+      contentType: application/json
+      payload:
+        type: object
+        description: Wrapper envelope framing WebSocket text messages.
+        required:
+        - messageId
+        - messageType
+        - payload
+        properties:
+          messageId:
+            type: string
+            format: uuid
+            description: Unique message identifier (UUIDv7 recommended).
+            example: 0191ebc2-8400-7c23-881e-123456789abc
+          sourceMessageId:
+            type: string
+            format: uuid
+            description: Identifier of the request message this frame responds to, or 00000000-0000-0000-0000-000000000000 for original frames.
+            example: 00000000-0000-0000-0000-000000000000
+          messageType:
+            type: string
+            const: status_ack
+            description: Message discriminator set to 'status_ack'.
+          payload:
+            type: string
+            description: JSON-stringified `StatusAckPayload` payload.
+    BatchAckMessage:
+      name: BatchAckMessage
+      title: Batch Acknowledgment
+      summary: Server confirms persistence of a micro-batch.
+      contentType: application/json
+      payload:
+        type: object
+        description: Wrapper envelope framing WebSocket text messages.
+        required:
+        - messageId
+        - messageType
+        - payload
+        properties:
+          messageId:
+            type: string
+            format: uuid
+            description: Unique message identifier (UUIDv7 recommended).
+            example: 0191ebc2-8400-7c23-881e-123456789abc
+          sourceMessageId:
+            type: string
+            format: uuid
+            description: Identifier of the request message this frame responds to, or 00000000-0000-0000-0000-000000000000 for original frames.
+            example: 00000000-0000-0000-0000-000000000000
+          messageType:
+            type: string
+            const: batch_ack
+            description: Message discriminator set to 'batch_ack'.
+          payload:
+            type: string
+            description: JSON-stringified `BatchAckPayload` payload.
+    AnalysisCompletedAckMessage:
+      name: AnalysisCompletedAckMessage
+      title: Analysis Completed Acknowledgment
+      summary: Server confirms all nodes and relations are reconciled in database.
+      contentType: application/json
+      payload:
+        type: object
+        description: Wrapper envelope framing WebSocket text messages.
+        required:
+        - messageId
+        - messageType
+        - payload
+        properties:
+          messageId:
+            type: string
+            format: uuid
+            description: Unique message identifier (UUIDv7 recommended).
+            example: 0191ebc2-8400-7c23-881e-123456789abc
+          sourceMessageId:
+            type: string
+            format: uuid
+            description: Identifier of the request message this frame responds to, or 00000000-0000-0000-0000-000000000000 for original frames.
+            example: 00000000-0000-0000-0000-000000000000
+          messageType:
+            type: string
+            const: analysis_completed_ack
+            description: Message discriminator set to 'analysis_completed_ack'.
+          payload:
+            type: string
+            description: JSON-stringified `AnalysisCompletedAckPayload` payload.
+  schemas:
+    RegistrationPayload:
+      type: object
+      properties:
+        serviceName:
+          type: string
+          description: Name of a service.
+        version:
+          type: string
+          description: Legimitive version of service.
+        capabilities:
+          type: array
+          items:
+            type: string
+            nullable: true
+          description: Capabilities of a service
+        supportedLanguages:
+          type: array
+          items:
+            type: string
+            nullable: true
+          nullable: true
+          description: Supported languages for service. Applicable for analyzers.
+        serviceType:
+          type: integer
+          description: Type of a service.
+        poolId:
+          type: string
+          nullable: true
+          description: Optional logical pool identifier grouping multiple worker instances.
+        serviceKey:
+          type: string
+          nullable: true
+          description: Optional service pool authentication key passed in registration payload.
+        compilerEngine:
+          type: string
+          nullable: true
+          description: Optional compiler engine declaration (e.g. "roslyn", "tree-sitter").
+        compilerVersion:
+          type: string
+          nullable: true
+          description: Optional compiler engine version (e.g. "4.8.0", "0.22.0").
+        computeWeight:
+          type: string
+          nullable: true
+          description: Optional compute weight capacity declaration ("lightweight" vs "heavy_compute").
+        protocolVersion:
+          type: string
+          nullable: true
+          description: Negotiated protocol version supported by this service (e.g. "1.0.0", "1.1.0").
+        instanceId:
+          type: string
+          description: Instance id.
+      required:
+      - serviceName
+      - version
+      - capabilities
+      - supportedLanguages
+      - serviceType
+      - instanceId
+      description: Payload for registering a service with the server.
+    StatusPayload:
+      type: object
+      properties:
+        status:
+          type: integer
+          description: Actual service status. For more information about avaliable statuses see .
+        instanceId:
+          type: string
+          description: Instance id.
+      required:
+      - status
+      - instanceId
+      description: Periodic status heartbeat payload.
+    AnalysisStatusPayload:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Textual message of the analysis status.
+        progress_percentage:
+          type: number
+          nullable: true
+          description: Overall percentage of analysis completion (0.0 to 100.0).
+        processed_items:
+          type: integer
+          nullable: true
+          description: Number of items processed so far (e.g. syntax trees, files, or nodes).
+        total_items:
+          type: integer
+          nullable: true
+          description: Total number of items to process in the current phase or run.
+        current_file:
+          type: string
+          nullable: true
+          description: Path or name of the file currently being processed.
+        run_id:
+          type: string
+          nullable: true
+          description: Unique run identifier associated with this status update.
+        commit_hash:
+          type: string
+          nullable: true
+          description: Commit hash associated with this analysis run.
+        branch:
+          type: string
+          nullable: true
+          description: Git branch associated with this analysis run.
+        commit_message:
+          type: string
+          nullable: true
+          description: Git commit message associated with this analysis run.
+        status:
+          type: integer
+          description: Actual service status. For more information about avaliable statuses see .
+        instanceId:
+          type: string
+          description: Instance id.
+      required:
+      - message
+      - status
+      - instanceId
+      description: Analysis progress and lifecycle status payload.
+    AnalysisMetricsPayload:
+      type: object
+      properties:
+        run_id:
+          type: string
+          description: Gets or sets the unique identifier for the analysis run.
+        started_at:
+          type: string
+          format: date-time
+          description: Gets or sets the start time of the analysis run.
+        ended_at:
+          type: string
+          format: date-time
+          description: Gets or sets the end time of the analysis run.
+        duration_ms:
+          type: number
+          description: Gets or sets the duration of the analysis run in milliseconds.
+        generated_nodes:
+          type: integer
+          description: Gets or sets the number of nodes generated during the analysis.
+        generated_relations:
+          type: integer
+          description: Gets or sets the number of relations generated during the analysis.
+        commit_hash:
+          type: string
+          nullable: true
+          description: Gets or sets the commit hash associated with the analysis run.
+        branch:
+          type: string
+          nullable: true
+          description: Gets or sets the git branch associated with the analysis run.
+        commit_message:
+          type: string
+          nullable: true
+          description: Gets or sets the git commit message associated with the analysis run.
+        instanceId:
+          type: string
+          description: Instance id.
+      required:
+      - run_id
+      - started_at
+      - ended_at
+      - duration_ms
+      - generated_nodes
+      - generated_relations
+      - instanceId
+      description: Summary metrics emitted at the conclusion of an analysis run.
+    RunAnalysisPayload:
+      type: object
+      properties:
+        run_id:
+          type: string
+          description: Unique execution run identifier.
+        code_context:
+          type: object
+          properties:
+            commit_hash:
+              type: string
+              description: Commit hash.
+            branch_name:
+              type: string
+              description: Branch name.
+            repository_url:
+              type: string
+              description: Repository URL.
+            provider:
+              type: string
+              description: Provider of AccesToken.
+            isPublic:
+              type: boolean
+              description: Gets or sets a value indicating whether the repository is publicly accessible.
+            credentials:
+              type: object
+              properties:
+                access_token:
+                  type: string
+                  description: AccessToken.
+              required:
+              - access_token
+              nullable: true
+              description: Optional credentials for Git access.
+            base_commit_hash:
+              type: string
+              nullable: true
+              description: Optional base commit hash for diff / incremental CI/CD scans.
+            modified_files:
+              type: array
+              items:
+                type: string
+                nullable: true
+              nullable: true
+              description: Optional collection of modified file paths between base commit and target commit.
+          required:
+          - commit_hash
+          - branch_name
+          - repository_url
+          - provider
+          description: Target repository and branch/commit context.
+        requested_capabilities:
+          type: array
+          items:
+            type: string
+            nullable: true
+          nullable: true
+          description: Optional collection of specific capabilities requested for this execution run. When null or empty, the analyzer executes its default capabilities.
+        batching_config:
+          type: object
+          properties:
+            max_batch_size:
+              type: integer
+              description: Maximum number of items aggregated in a single micro-batch before flushing. Defaults to 100.
+            flush_interval_ms:
+              type: integer
+              description: Maximum elapsed milliseconds before flushing buffered items. Defaults to 100ms.
+          nullable: true
+          description: Optional micro-batching configuration controlling maximum batch size and flush interval.
+        compute_weight:
+          type: string
+          nullable: true
+          description: Optional compute weight requirement for this analysis run ("lightweight" vs "heavy_compute").
+        compiler_engine:
+          type: string
+          nullable: true
+          description: Optional required compiler engine (e.g. "roslyn", "tree-sitter").
+        compiler_version:
+          type: string
+          nullable: true
+          description: Optional required compiler engine version.
+      required:
+      - run_id
+      - code_context
+      description: Task dispatch payload commanding an analyzer to analyze a code repository.
+    RunAnalysisAckPayload:
+      type: object
+      properties:
+        run_id:
+          type: string
+          description: Gets or sets the analysis run identifier being acknowledged.
+        timestamp:
+          type: string
+          format: date-time
+          description: Gets or sets the UTC timestamp when the instruction was received.
+        instanceId:
+          type: string
+          description: Instance id.
+      required:
+      - instanceId
+      description: Acknowledgment payload sent by worker upon accepting a run_analysis task.
+    CancelAnalysisPayload:
+      type: object
+      properties:
+        run_id:
+          type: string
+          description: Unique identifier of the analysis run to cancel.
+        reason:
+          type: string
+          nullable: true
+          description: Optional reason describing why the analysis was canceled.
+      required:
+      - run_id
+      description: Payload for commanding an analyzer to cancel an active analysis task.
+    StatusAckPayload:
+      type: object
+      properties:
+        instance_id:
+          type: string
+          description: Gets or sets the instance identifier of the worker being acknowledged.
+        timestamp:
+          type: string
+          format: date-time
+          description: Gets or sets the UTC timestamp when the heartbeat was acknowledged.
+      description: Server heartbeat acknowledgment payload.
+    BatchAckPayload:
+      type: object
+      properties:
+        batch_count:
+          type: integer
+          description: Gets or sets the count of items in the batch that was persisted.
+        run_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Gets or sets the run identifier associated with the batch.
+        timestamp:
+          type: string
+          format: date-time
+          description: Gets or sets the UTC timestamp when the batch was acknowledged.
+      description: Server acknowledgment for a processed micro-batch of AST nodes or relations.
+    AnalysisCompletedAckPayload:
+      type: object
+      properties:
+        run_id:
+          type: string
+          description: Gets or sets the analysis run identifier.
+        timestamp:
+          type: string
+          format: date-time
+          description: Gets or sets the UTC timestamp when the analysis completion was acknowledged.
+      description: Server acknowledgment confirming that all AST nodes and relations have been finalized in the database.
+    NodesBatchPayload:
+      type: object
+      properties:
+        nodes:
+          type: array
+          description: Collection of AST nodes emitted in this micro-batch.
+      required:
+      - nodes
+      description: Micro-batch array payload containing multiple AST nodes.
+    RelationsBatchPayload:
+      type: object
+      properties:
+        relations:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              from:
+                type: string
+              to:
+                type: string
+              relation_type:
+                type: string
+              is_pending:
+                type: boolean
+              run_id:
+                type: string
+                nullable: true
+            nullable: true
+          description: Collection of graph relations emitted in this micro-batch.
+      required:
+      - relations
+      description: Micro-batch array payload containing multiple AST relation edges.
+    ErrorMessagePayload:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Machine-readable standardized error code. See .
+        message:
+          type: string
+          description: Human-readable descriptive error message.
+        run_id:
+          type: string
+          nullable: true
+          description: Optional analysis run identifier correlated with the failure.
+        is_fatal:
+          type: boolean
+          description: Indicates whether the error was fatal and aborted the operation or worker process.
+        details:
+          type: string
+          nullable: true
+          description: Optional additional technical details or stack trace for diagnostics.
+        timestamp:
+          type: string
+          format: date-time
+          description: UTC timestamp when the error was recorded.
+      required:
+      - code
+      - message
+      description: Standardized error message payload for reporting failures.
+    RegistrationStatusPayload:
+      type: object
+      properties:
+        status:
+          type: integer
+          description: Status of registration process can have value on of .
+      required:
+      - status
+      description: Server registration response payload indicating whether registration was accepted.
+    NodeBase:
+      type: object
+      description: Base schema for all code AST entities.
+      required:
+      - stable_id
+      - content_hash
+      - type
+      properties:
+        stable_id:
+          type: string
+          description: Deterministic ID based on structural language properties, invariant across builds.
+          example: MyApp.Services.UserService
+        content_hash:
+          type: string
+          description: Hash representing node content/definition state.
+          example: 8f4b237c9a1e05d2
+        type:
+          type: string
+          description: 'AST entity type: classes, methods, fields, properties, interfaces, enums, records, structs, namespaces, parameters, delegates, events, attributes, etc.'
+        parent_id:
+          type: string
+          nullable: true
+          description: Identifier of parent container node.
+        language:
+          type: string
+          nullable: true
+          description: Programming language (e.g. csharp, python).
+    ClassNode:
+      type: object
+      properties:
+        is_static:
+          type: boolean
+          description: Gets a value indicating whether the class is marked as static.
+        is_abstract:
+          type: boolean
+          description: Gets a value indicating whether the class is abstract.
+        is_sealed:
+          type: boolean
+          description: Gets a value indicating whether the class is sealed (cannot be inherited).
+        is_generic:
+          type: boolean
+          description: Gets a value indicating whether the class has generic parameters.
+        arity:
+          type: integer
+          description: Gets the number of generic type parameters (Arity) defined for this class.
+        cyclomatic_complexity:
+          type: integer
+          description: Gets the cyclomatic complexity of the class.
+        loc:
+          type: integer
+          description: Gets the lines of code (LOC) of the class.
+        locations:
+          type: array
+          items:
+            type: object
+            properties:
+              file_path:
+                type: string
+                description: Gets the absolute or relative path to the source file.
+              start_line:
+                type: integer
+                description: Gets the 1-based start line number.
+              end_line:
+                type: integer
+                description: Gets the 1-based end line number.
+              start_column:
+                type: integer
+                description: Gets the 1-based start column position.
+              end_column:
+                type: integer
+                description: Gets the 1-based end column position.
+              code_snippet:
+                type: string
+                description: Gets the source code snippet representing this location.
+            required:
+            - file_path
+            - start_line
+            - end_line
+            - start_column
+            - end_column
+            - code_snippet
+            nullable: true
+          description: Gets the collection of file paths where this class is declared. Relevant for partial classes spread across multiple files.
+        accessibility:
+          type: integer
+          description: Gets or sets the visibility of the class. Defaults to .
+        type:
+          type: string
+          nullable: true
+          description: Tetermines the type of node.
+        identifier:
+          type: string
+          description: Gets or sets the human-readable identifier. Used for indexing and searchability within the graph database.
+        summary:
+          type: string
+          nullable: true
+          description: Gets the XML documentation summary associated with the type.
+        stable_id:
+          type: string
+          description: Gets a deterministic identifier based on structural language properties. This ID remains stable across builds, allowing for persistent node mapping.
+        content_hash:
+          type: string
+          description: Gets a hash representing the current state of the node's content. For example, changes to a class body between commits will result in a different hash, signaling that the node's definition has evolved.
+      required:
+      - is_static
+      - is_abstract
+      - is_sealed
+      - is_generic
+      - arity
+      - locations
+      - accessibility
+      - identifier
+      - summary
+      - stable_id
+      - content_hash
+      description: Represents a class definition in the AST graph.
+    InterfaceNode:
+      type: object
+      properties:
+        is_generic:
+          type: boolean
+          description: Gets a value indicating whether the interface has generic parameters (e.g., IReadOnlyList ).
+        arity:
+          type: integer
+          description: Gets the number of generic type parameters (Arity) defined for this interface.
+        cyclomatic_complexity:
+          type: integer
+          description: Gets the cyclomatic complexity of the interface.
+        loc:
+          type: integer
+          description: Gets the lines of code (LOC) of the interface.
+        accessibility:
+          type: integer
+          description: Gets or sets the visibility of the interface.
+        locations:
+          type: array
+          items:
+            type: object
+            properties:
+              file_path:
+                type: string
+                description: Gets the absolute or relative path to the source file.
+              start_line:
+                type: integer
+                description: Gets the 1-based start line number.
+              end_line:
+                type: integer
+                description: Gets the 1-based end line number.
+              start_column:
+                type: integer
+                description: Gets the 1-based start column position.
+              end_column:
+                type: integer
+                description: Gets the 1-based end column position.
+              code_snippet:
+                type: string
+                description: Gets the source code snippet representing this location.
+            required:
+            - file_path
+            - start_line
+            - end_line
+            - start_column
+            - end_column
+            - code_snippet
+            nullable: true
+          description: Gets the collection of file paths where this interface is declared. Supports partial interface definitions spread across multiple files.
+        type:
+          type: string
+          nullable: true
+          description: Tetermines the type of node.
+        identifier:
+          type: string
+          description: Gets or sets the human-readable identifier. Used for indexing and searchability within the graph database.
+        summary:
+          type: string
+          nullable: true
+          description: Gets the XML documentation summary associated with the type.
+        stable_id:
+          type: string
+          description: Gets a deterministic identifier based on structural language properties. This ID remains stable across builds, allowing for persistent node mapping.
+        content_hash:
+          type: string
+          description: Gets a hash representing the current state of the node's content. For example, changes to a class body between commits will result in a different hash, signaling that the node's definition has evolved.
+      required:
+      - is_generic
+      - accessibility
+      - locations
+      - identifier
+      - summary
+      - stable_id
+      - content_hash
+      description: Represents an interface definition in the AST graph.
+    RecordNode:
+      type: object
+      properties:
+        accessibility:
+          type: integer
+          description: Gets or sets the visibility of the record.
+        is_record_struct:
+          type: boolean
+          description: Gets a value indicating whether this is a 'record struct'. If false, it represents a 'record class'.
+        is_read_only:
+          type: boolean
+          description: Gets a value indicating whether the record struct is marked as 'readonly'. (Only applicable when is true).
+        is_static:
+          type: boolean
+          description: Gets a value indicating whether the record is marked as static.
+        is_abstract:
+          type: boolean
+          description: Gets a value indicating whether the record is abstract.
+        is_sealed:
+          type: boolean
+          description: Gets a value indicating whether the record is sealed.
+        is_generic:
+          type: boolean
+          description: Gets a value indicating whether the record has generic parameters.
+        arity:
+          type: integer
+          description: Gets the number of generic type parameters (Arity) defined for this record.
+        cyclomatic_complexity:
+          type: integer
+          description: Gets the cyclomatic complexity of the record.
+        loc:
+          type: integer
+          description: Gets the lines of code (LOC) of the record.
+        locations:
+          type: array
+          items:
+            type: object
+            properties:
+              file_path:
+                type: string
+                description: Gets the absolute or relative path to the source file.
+              start_line:
+                type: integer
+                description: Gets the 1-based start line number.
+              end_line:
+                type: integer
+                description: Gets the 1-based end line number.
+              start_column:
+                type: integer
+                description: Gets the 1-based start column position.
+              end_column:
+                type: integer
+                description: Gets the 1-based end column position.
+              code_snippet:
+                type: string
+                description: Gets the source code snippet representing this location.
+            required:
+            - file_path
+            - start_line
+            - end_line
+            - start_column
+            - end_column
+            - code_snippet
+            nullable: true
+          description: Gets the collection of file paths where this record is declared. Records are frequently 'partial' when used with source generators or primary constructors.
+        type:
+          type: string
+          nullable: true
+          description: Tetermines the type of node.
+        identifier:
+          type: string
+          description: Gets or sets the human-readable identifier. Used for indexing and searchability within the graph database.
+        summary:
+          type: string
+          nullable: true
+          description: Gets the XML documentation summary associated with the type.
+        stable_id:
+          type: string
+          description: Gets a deterministic identifier based on structural language properties. This ID remains stable across builds, allowing for persistent node mapping.
+        content_hash:
+          type: string
+          description: Gets a hash representing the current state of the node's content. For example, changes to a class body between commits will result in a different hash, signaling that the node's definition has evolved.
+      required:
+      - accessibility
+      - is_record_struct
+      - is_read_only
+      - is_static
+      - is_abstract
+      - is_sealed
+      - locations
+      - identifier
+      - summary
+      - stable_id
+      - content_hash
+      description: Represents a record (class or struct) definition in the AST graph.
+    StructNode:
+      type: object
+      properties:
+        is_read_only:
+          type: boolean
+          description: Gets a value indicating whether the struct is marked as 'readonly'. Readonly structs ensure that all fields are immutable and allow for performance optimizations.
+        is_ref_like:
+          type: boolean
+          description: Gets a value indicating whether this is a 'ref struct' (e.g., ). Ref-like structs are allocated on the stack and have strict usage constraints.
+        is_generic:
+          type: boolean
+          description: Gets a value indicating whether the struct has generic parameters.
+        arity:
+          type: integer
+          description: Gets the number of generic type parameters (Arity) defined for this struct.
+        cyclomatic_complexity:
+          type: integer
+          description: Gets the cyclomatic complexity of the struct.
+        loc:
+          type: integer
+          description: Gets the lines of code (LOC) of the struct.
+        accessibility:
+          type: integer
+          description: Gets or sets the visibility of the struct.
+        locations:
+          type: array
+          items:
+            type: object
+            properties:
+              file_path:
+                type: string
+                description: Gets the absolute or relative path to the source file.
+              start_line:
+                type: integer
+                description: Gets the 1-based start line number.
+              end_line:
+                type: integer
+                description: Gets the 1-based end line number.
+              start_column:
+                type: integer
+                description: Gets the 1-based start column position.
+              end_column:
+                type: integer
+                description: Gets the 1-based end column position.
+              code_snippet:
+                type: string
+                description: Gets the source code snippet representing this location.
+            required:
+            - file_path
+            - start_line
+            - end_line
+            - start_column
+            - end_column
+            - code_snippet
+            nullable: true
+          description: Gets the list of file paths where the struct is declared. Supports partial struct definitions across multiple files.
+        type:
+          type: string
+          nullable: true
+          description: Tetermines the type of node.
+        identifier:
+          type: string
+          description: Gets or sets the human-readable identifier. Used for indexing and searchability within the graph database.
+        summary:
+          type: string
+          nullable: true
+          description: Gets the XML documentation summary associated with the type.
+        stable_id:
+          type: string
+          description: Gets a deterministic identifier based on structural language properties. This ID remains stable across builds, allowing for persistent node mapping.
+        content_hash:
+          type: string
+          description: Gets a hash representing the current state of the node's content. For example, changes to a class body between commits will result in a different hash, signaling that the node's definition has evolved.
+      required:
+      - is_read_only
+      - is_ref_like
+      - is_generic
+      - accessibility
+      - locations
+      - identifier
+      - summary
+      - stable_id
+      - content_hash
+      description: Represents a struct definition in the AST graph.
+    EnumNode:
+      type: object
+      properties:
+        accessibility:
+          type: integer
+          description: Gets or sets the visibility of the enum.
+        location:
+          type: object
+          properties:
+            file_path:
+              type: string
+              description: Gets the absolute or relative path to the source file.
+            start_line:
+              type: integer
+              description: Gets the 1-based start line number.
+            end_line:
+              type: integer
+              description: Gets the 1-based end line number.
+            start_column:
+              type: integer
+              description: Gets the 1-based start column position.
+            end_column:
+              type: integer
+              description: Gets the 1-based end column position.
+            code_snippet:
+              type: string
+              description: Gets the source code snippet representing this location.
+          required:
+          - file_path
+          - start_line
+          - end_line
+          - start_column
+          - end_column
+          - code_snippet
+          nullable: true
+          description: Gets the source file path where the enum is defined.
+        type:
+          type: string
+          nullable: true
+          description: Tetermines the type of node.
+        identifier:
+          type: string
+          description: Gets or sets the human-readable identifier. Used for indexing and searchability within the graph database.
+        summary:
+          type: string
+          nullable: true
+          description: Gets the XML documentation summary associated with the type.
+        stable_id:
+          type: string
+          description: Gets a deterministic identifier based on structural language properties. This ID remains stable across builds, allowing for persistent node mapping.
+        content_hash:
+          type: string
+          description: Gets a hash representing the current state of the node's content. For example, changes to a class body between commits will result in a different hash, signaling that the node's definition has evolved.
+      required:
+      - accessibility
+      - location
+      - identifier
+      - summary
+      - stable_id
+      - content_hash
+      description: Represents an enum definition in the AST graph.
+    MethodNode:
+      type: object
+      properties:
+        accessibility:
+          type: integer
+          description: Gets or sets the visibility of the method.
+        method_kind:
+          type: string
+          description: Gets the specific kind of the method (e.g., "Ordinary", "Constructor", "UserDefinedOperator").
+        is_static:
+          type: boolean
+          description: Gets a value indicating whether the method is shared across all instances.
+        is_abstract:
+          type: boolean
+          description: Gets a value indicating whether the method is declared without an implementation.
+        is_virtual:
+          type: boolean
+          description: Gets a value indicating whether the method can be overridden in derived classes.
+        is_override:
+          type: boolean
+          description: Gets a value indicating whether this method overrides a base implementation.
+        is_sealed:
+          type: boolean
+          description: Gets a value indicating whether this method cannot be further overridden.
+        is_async:
+          type: boolean
+          description: Gets a value indicating whether the method is marked with the 'async' modifier.
+        is_extension_method:
+          type: boolean
+          description: Gets a value indicating whether this is an extension method.
+        is_generic:
+          type: boolean
+          description: Gets a value indicating whether the method has type parameters.
+        arity:
+          type: integer
+          description: Gets the number of generic type parameters (Arity) of the method.
+        locations:
+          type: array
+          items:
+            type: object
+            properties:
+              file_path:
+                type: string
+                description: Gets the absolute or relative path to the source file.
+              start_line:
+                type: integer
+                description: Gets the 1-based start line number.
+              end_line:
+                type: integer
+                description: Gets the 1-based end line number.
+              start_column:
+                type: integer
+                description: Gets the 1-based start column position.
+              end_column:
+                type: integer
+                description: Gets the 1-based end column position.
+              code_snippet:
+                type: string
+                description: Gets the source code snippet representing this location.
+            required:
+            - file_path
+            - start_line
+            - end_line
+            - start_column
+            - end_column
+            - code_snippet
+            nullable: true
+          description: Gets the list of files where the method is defined. Usually contains one file, unless the method is a partial method with both definition and implementation.
+        complexity:
+          type: integer
+          description: Contains the results of the cyclometric analysis
+        type:
+          type: string
+          nullable: true
+          description: Tetermines the type of node.
+        identifier:
+          type: string
+          description: Gets or sets the human-readable identifier. Used for indexing and searchability within the graph database.
+        summary:
+          type: string
+          nullable: true
+          description: Gets the XML documentation summary associated with the type.
+        stable_id:
+          type: string
+          description: Gets a deterministic identifier based on structural language properties. This ID remains stable across builds, allowing for persistent node mapping.
+        content_hash:
+          type: string
+          description: Gets a hash representing the current state of the node's content. For example, changes to a class body between commits will result in a different hash, signaling that the node's definition has evolved.
+      required:
+      - accessibility
+      - method_kind
+      - is_static
+      - is_abstract
+      - is_virtual
+      - is_override
+      - is_sealed
+      - is_async
+      - is_extension_method
+      - is_generic
+      - arity
+      - locations
+      - complexity
+      - identifier
+      - summary
+      - stable_id
+      - content_hash
+      description: Represents a method or constructor in the AST graph.
+    FieldNode:
+      type: object
+      properties:
+        accessibility:
+          type: integer
+          description: Gets or sets the visibility of the field.
+        is_const:
+          type: boolean
+          description: Gets a value indicating whether the field is a constant (evaluated at compile-time).
+        is_read_only:
+          type: boolean
+          description: Gets a value indicating whether the field is read-only (can only be set in a constructor).
+        is_static:
+          type: boolean
+          description: Gets a value indicating whether the field is shared across all instances.
+        is_volatile:
+          type: boolean
+          description: Gets a value indicating whether the field is volatile, signaling that it may be modified by multiple threads.
+        constant_value:
+          type: string
+          nullable: true
+          description: Gets the string representation of the constant value, if is true.
+        location:
+          type: object
+          properties:
+            file_path:
+              type: string
+              description: Gets the absolute or relative path to the source file.
+            start_line:
+              type: integer
+              description: Gets the 1-based start line number.
+            end_line:
+              type: integer
+              description: Gets the 1-based end line number.
+            start_column:
+              type: integer
+              description: Gets the 1-based start column position.
+            end_column:
+              type: integer
+              description: Gets the 1-based end column position.
+            code_snippet:
+              type: string
+              description: Gets the source code snippet representing this location.
+          required:
+          - file_path
+          - start_line
+          - end_line
+          - start_column
+          - end_column
+          - code_snippet
+          nullable: true
+          description: Gets the source file path where the field is declared.
+        type:
+          type: string
+          nullable: true
+          description: Tetermines the type of node.
+        identifier:
+          type: string
+          description: Gets or sets the human-readable identifier. Used for indexing and searchability within the graph database.
+        summary:
+          type: string
+          nullable: true
+          description: Gets the XML documentation summary associated with the type.
+        stable_id:
+          type: string
+          description: Gets a deterministic identifier based on structural language properties. This ID remains stable across builds, allowing for persistent node mapping.
+        content_hash:
+          type: string
+          description: Gets a hash representing the current state of the node's content. For example, changes to a class body between commits will result in a different hash, signaling that the node's definition has evolved.
+      required:
+      - accessibility
+      - is_const
+      - is_read_only
+      - is_static
+      - is_volatile
+      - constant_value
+      - location
+      - identifier
+      - summary
+      - stable_id
+      - content_hash
+      description: Represents a field in the AST graph.
+    PropertyNode:
+      type: object
+      properties:
+        accessibility:
+          type: integer
+          description: Gets or sets the visibility of the property.
+        is_indexer:
+          type: boolean
+          description: Gets a value indicating whether this property is an indexer (e.g., this[int index]).
+        is_static:
+          type: boolean
+          description: Gets a value indicating whether the property is shared across all instances.
+        is_abstract:
+          type: boolean
+          description: Gets a value indicating whether the property is declared without implementation.
+        is_virtual:
+          type: boolean
+          description: Gets a value indicating whether the property can be overridden in derived classes.
+        is_override:
+          type: boolean
+          description: Gets a value indicating whether this property overrides a base implementation.
+        is_sealed:
+          type: boolean
+          description: Gets a value indicating whether this property cannot be further overridden.
+        has_get:
+          type: boolean
+          description: Gets a value indicating whether the property has a 'get' accessor.
+        has_set:
+          type: boolean
+          description: Gets a value indicating whether the property has a 'set' or 'init' accessor.
+        is_init_only:
+          type: boolean
+          description: Gets a value indicating whether the 'set' accessor is 'init-only'. Relevant for C# 9.0+ immutable object initialization.
+        is_required:
+          type: boolean
+          description: Gets a value indicating whether the property is marked with the 'required' keyword (C# 11+).
+        locations:
+          type: array
+          items:
+            type: object
+            properties:
+              file_path:
+                type: string
+                description: Gets the absolute or relative path to the source file.
+              start_line:
+                type: integer
+                description: Gets the 1-based start line number.
+              end_line:
+                type: integer
+                description: Gets the 1-based end line number.
+              start_column:
+                type: integer
+                description: Gets the 1-based start column position.
+              end_column:
+                type: integer
+                description: Gets the 1-based end column position.
+              code_snippet:
+                type: string
+                description: Gets the source code snippet representing this location.
+            required:
+            - file_path
+            - start_line
+            - end_line
+            - start_column
+            - end_column
+            - code_snippet
+            nullable: true
+          description: Gets the collection of file paths where this property is declared. Supports partial types where properties might be defined in different locations.
+        type:
+          type: string
+          nullable: true
+          description: Tetermines the type of node.
+        identifier:
+          type: string
+          description: Gets or sets the human-readable identifier. Used for indexing and searchability within the graph database.
+        summary:
+          type: string
+          nullable: true
+          description: Gets the XML documentation summary associated with the type.
+        stable_id:
+          type: string
+          description: Gets a deterministic identifier based on structural language properties. This ID remains stable across builds, allowing for persistent node mapping.
+        content_hash:
+          type: string
+          description: Gets a hash representing the current state of the node's content. For example, changes to a class body between commits will result in a different hash, signaling that the node's definition has evolved.
+      required:
+      - accessibility
+      - is_indexer
+      - is_static
+      - is_abstract
+      - is_virtual
+      - is_override
+      - is_sealed
+      - has_get
+      - has_set
+      - is_init_only
+      - is_required
+      - locations
+      - identifier
+      - summary
+      - stable_id
+      - content_hash
+      description: Represents a property in the AST graph.
+    EventNode:
+      type: object
+      properties:
+        accessibility:
+          type: integer
+          description: Gets or sets the visibility of the event.
+        is_static:
+          type: boolean
+          description: Gets a value indicating whether the event is shared across all instances of the type.
+        is_abstract:
+          type: boolean
+          description: Gets a value indicating whether the event is declared without an implementation.
+        is_virtual:
+          type: boolean
+          description: Gets a value indicating whether the event can be overridden in derived classes.
+        is_override:
+          type: boolean
+          description: Gets a value indicating whether this event overrides a base class event.
+        is_sealed:
+          type: boolean
+          description: Gets a value indicating whether this event cannot be further overridden.
+        has_custom_accessors:
+          type: boolean
+          description: Gets a value indicating whether the event explicitly defines 'add' and 'remove' accessors. True if the event is not a simple field-like event.
+        location:
+          type: object
+          properties:
+            file_path:
+              type: string
+              description: Gets the absolute or relative path to the source file.
+            start_line:
+              type: integer
+              description: Gets the 1-based start line number.
+            end_line:
+              type: integer
+              description: Gets the 1-based end line number.
+            start_column:
+              type: integer
+              description: Gets the 1-based start column position.
+            end_column:
+              type: integer
+              description: Gets the 1-based end column position.
+            code_snippet:
+              type: string
+              description: Gets the source code snippet representing this location.
+          required:
+          - file_path
+          - start_line
+          - end_line
+          - start_column
+          - end_column
+          - code_snippet
+          nullable: true
+          description: Gets the source file path where the event is declared.
+        type:
+          type: string
+          nullable: true
+          description: Tetermines the type of node.
+        identifier:
+          type: string
+          description: Gets or sets the human-readable identifier. Used for indexing and searchability within the graph database.
+        summary:
+          type: string
+          nullable: true
+          description: Gets the XML documentation summary associated with the type.
+        stable_id:
+          type: string
+          description: Gets a deterministic identifier based on structural language properties. This ID remains stable across builds, allowing for persistent node mapping.
+        content_hash:
+          type: string
+          description: Gets a hash representing the current state of the node's content. For example, changes to a class body between commits will result in a different hash, signaling that the node's definition has evolved.
+      required:
+      - accessibility
+      - is_static
+      - is_abstract
+      - is_virtual
+      - is_override
+      - is_sealed
+      - has_custom_accessors
+      - location
+      - identifier
+      - summary
+      - stable_id
+      - content_hash
+      description: Represents an event member in the AST graph.
+    DelegateNode:
+      type: object
+      properties:
+        accessibility:
+          type: integer
+          description: Gets or sets the visibility of the delegate.
+        location:
+          type: object
+          properties:
+            file_path:
+              type: string
+              description: Gets the absolute or relative path to the source file.
+            start_line:
+              type: integer
+              description: Gets the 1-based start line number.
+            end_line:
+              type: integer
+              description: Gets the 1-based end line number.
+            start_column:
+              type: integer
+              description: Gets the 1-based start column position.
+            end_column:
+              type: integer
+              description: Gets the 1-based end column position.
+            code_snippet:
+              type: string
+              description: Gets the source code snippet representing this location.
+          required:
+          - file_path
+          - start_line
+          - end_line
+          - start_column
+          - end_column
+          - code_snippet
+          nullable: true
+          description: Gets the file path where the delegate is defined. Unlike classes, delegates cannot be partial, so they are typically associated with a single source location.
+        type:
+          type: string
+          nullable: true
+          description: Tetermines the type of node.
+        identifier:
+          type: string
+          description: Gets or sets the human-readable identifier. Used for indexing and searchability within the graph database.
+        summary:
+          type: string
+          nullable: true
+          description: Gets the XML documentation summary associated with the type.
+        stable_id:
+          type: string
+          description: Gets a deterministic identifier based on structural language properties. This ID remains stable across builds, allowing for persistent node mapping.
+        content_hash:
+          type: string
+          description: Gets a hash representing the current state of the node's content. For example, changes to a class body between commits will result in a different hash, signaling that the node's definition has evolved.
+      required:
+      - accessibility
+      - location
+      - identifier
+      - summary
+      - stable_id
+      - content_hash
+      description: Represents a delegate definition in the AST graph.
+    NamespaceNode:
+      type: object
+      properties:
+        identifier:
+          type: string
+          description: Gets or sets the fully qualified name of the namespace (e.g., "System.Collections.Generic"). Used as the primary label for grouping types within the graph.
+        type:
+          type: string
+          nullable: true
+          description: Tetermines the type of node.
+        stable_id:
+          type: string
+          description: Gets a deterministic identifier based on structural language properties. This ID remains stable across builds, allowing for persistent node mapping.
+        content_hash:
+          type: string
+          description: Gets a hash representing the current state of the node's content. For example, changes to a class body between commits will result in a different hash, signaling that the node's definition has evolved.
+      required:
+      - identifier
+      - stable_id
+      - content_hash
+      description: Represents a namespace container in the AST graph.
+    ParameterNode:
+      type: object
+      properties:
+        identifier:
+          type: string
+          description: Gets the name of the parameter.
+        ordinal:
+          type: integer
+          description: Gets the zero-based position of the parameter in the formal parameter list.
+        ref_kind:
+          type: string
+          description: Gets the ref kind of the parameter (e.g., "None", "Ref", "Out", "In").
+        is_params:
+          type: boolean
+          description: Gets a value indicating whether the parameter is a parameter array (marked with the 'params' keyword).
+        is_optional:
+          type: boolean
+          description: Gets a value indicating whether the parameter is optional (has a default value).
+        is_this:
+          type: boolean
+          description: Gets a value indicating whether this is the 'this' parameter of an extension method.
+        default_value:
+          type: string
+          nullable: true
+          description: Gets the string representation of the default value, if is true.
+        type:
+          type: string
+          nullable: true
+          description: Tetermines the type of node.
+        stable_id:
+          type: string
+          description: Gets a deterministic identifier based on structural language properties. This ID remains stable across builds, allowing for persistent node mapping.
+        content_hash:
+          type: string
+          description: Gets a hash representing the current state of the node's content. For example, changes to a class body between commits will result in a different hash, signaling that the node's definition has evolved.
+      required:
+      - identifier
+      - ordinal
+      - ref_kind
+      - is_params
+      - is_optional
+      - is_this
+      - default_value
+      - stable_id
+      - content_hash
+      description: Represents a method parameter in the AST graph.
+    AttributeNode:
+      type: object
+      properties:
+        identifier:
+          type: string
+          description: Gets or sets the human-readable identifier (e.g., MethodName or FullClassName). Used for indexing and searchability within the graph database.
+        arguments:
+          type: array
+          items:
+            type: string
+            nullable: true
+          description: Gets or sets the list of arguments associated with the attribute.
+        type:
+          type: string
+          nullable: true
+          description: Tetermines the type of node.
+        stable_id:
+          type: string
+          description: Gets a deterministic identifier based on structural language properties. This ID remains stable across builds, allowing for persistent node mapping.
+        content_hash:
+          type: string
+          description: Gets a hash representing the current state of the node's content. For example, changes to a class body between commits will result in a different hash, signaling that the node's definition has evolved.
+      required:
+      - identifier
+      - arguments
+      - stable_id
+      - content_hash
+      description: Represents a code attribute/decorator in the AST graph.
+    RelationNode:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 'Unique deterministic identifier for the relation edge. Computed via : Direct: SHA256("{from}|{relation_type}|{to}")Pending: SHA256("{from}|{relation_type}|{to}|pending")'
+        from:
+          type: string
+          description: The identifier of the source node (usually the caller or declaring symbol's content hash).
+        to:
+          type: string
+          description: The identifier of the target node. Contains the target node's ContentHash when direct ( is false), or the target symbol's StableId when pending resolution ( is true).
+        relation_type:
+          type: string
+          description: The semantic type of the relationship (e.g., "CONTAINS", "IMPLEMENTS", "CALLS", "OF_TYPE"). See .
+        is_pending:
+          type: boolean
+          description: Indicates whether the target node was not yet parsed or resolved during streaming analysis. When true, allows analyzers to emit edges without buffering entire syntax graphs in memory. The server resolves pending relations in a post-ingestion query before completion acknowledgement.
+        run_id:
+          type: string
+          nullable: true
+          description: Identifier of the current analysis execution session correlated with this edge.
+      description: Represents a directed relationship edge between two AST entities.
+    CodeLocation:
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: Gets the absolute or relative path to the source file.
+        start_line:
+          type: integer
+          description: Gets the 1-based start line number.
+        end_line:
+          type: integer
+          description: Gets the 1-based end line number.
+        start_column:
+          type: integer
+          description: Gets the 1-based start column position.
+        end_column:
+          type: integer
+          description: Gets the 1-based end column position.
+        code_snippet:
+          type: string
+          description: Gets the source code snippet representing this location.
+      required:
+      - file_path
+      - start_line
+      - end_line
+      - start_column
+      - end_column
+      - code_snippet
+      description: Source code file location coordinates.
