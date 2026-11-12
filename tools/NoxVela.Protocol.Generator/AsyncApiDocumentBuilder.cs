@@ -463,13 +463,13 @@ public static class AsyncApiDocumentBuilder
                     }
                     else
                     {
-                        Console.WriteLine("[AsyncApiGenerator] Warning: asyncapi command exited with code " + process.ExitCode);
+                        throw new InvalidOperationException($"[AsyncApiGenerator] asyncapi CLI command failed with exit code {process.ExitCode}");
                     }
                 }
                 else
                 {
                     process.Kill();
-                    Console.WriteLine("[AsyncApiGenerator] Warning: asyncapi command timed out.");
+                    throw new TimeoutException("[AsyncApiGenerator] asyncapi command timed out after 90 seconds.");
                 }
             }
         }

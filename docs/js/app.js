@@ -3,7 +3,7 @@
   "asyncapi": "3.1.0",
   "info": {
     "title": "NoxVela Service Protocol",
-    "version": "1.1.0",
+    "version": "1.0.0",
     "description": "Bilateral WebSocket specification for communication between NoxVela Server and external worker services (Code Analyzers, AI services, etc.).\n\nAll messages across the WebSocket connection use UTF-8 text frames adhering to the `Wrapper` envelope.\nNotice that the `payload` property within the wrapper is a serialized JSON string.",
     "license": {
       "name": "MIT",
