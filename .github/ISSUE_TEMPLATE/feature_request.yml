@@ -1,0 +1,46 @@
+name: Feature Request / Contract RFC
+description: Propose a new data contract, message type, or protocol enhancement
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template to propose additions to the `NoxVela.Protocol` standard (AST node types, relations, handshake parameters, or telemetry).
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem & Motivation
+      description: What analyzer capability, language support, or platform feature requires this new contract?
+      placeholder: "e.g. Kotlin analyzer needs support for CoroutineNode..."
+    validations:
+      required: true
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed Solution & Schema
+      description: Describe the proposed message type, payload record, or schema structure. Provide code or JSON schema samples if possible.
+      render: csharp
+    validations:
+      required: true
+  - type: textarea
+    id: backward-compatibility
+    attributes:
+      label: Backward Compatibility & Impact
+      description: How will existing server handlers and external analyzers handle this addition? Is this change purely additive or breaking?
+      placeholder: "This is purely additive; older servers will ignore the optional field..."
+    validations:
+      required: true
+  - type: dropdown
+    id: target-scope
+    attributes:
+      label: Target Scope
+      description: Which area does this enhancement impact?
+      options:
+        - "AST Code Nodes & Relations"
+        - "Analyzer Micro-Batching & Streaming"
+        - "AI / Semantic RAG Contracts"
+        - "Handshake, Security & Metadata Headers"
+        - "AsyncAPI Generator & Tooling"
+    validations:
+      required: true
