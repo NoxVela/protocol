@@ -1,7 +1,7 @@
 asyncapi: 3.1.0
 info:
   title: NoxVela Service Protocol
-  version: 1.1.0
+  version: 1.0.0
   description: >-
     Bilateral WebSocket specification for communication between NoxVela Server and external worker services (Code Analyzers, AI services, etc.).
 
